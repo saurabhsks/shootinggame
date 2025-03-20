@@ -126,6 +126,8 @@ const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }>
         return () => clearInterval(interval);
     }, [onGameOver]);
 
+
+
     // Update blood particles
     useEffect(() => {
         let animationFrameId: number;
@@ -280,7 +282,8 @@ const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }>
                 </Sphere>
             ))}
 
-            <Environment preset="park" background />
+            {/* <Environment preset="park" background /> */}
+            <Environment files="/hdrs/lilienstein_2k.hdr" background />
         </>
     );
 };
