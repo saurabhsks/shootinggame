@@ -16,11 +16,22 @@ interface Bullet {
     velocity: [number, number, number];
 }
 
+interface BoxState {
+    id: number;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+    isDying: boolean;
+    deathProgress: number;
+    color: string;
+    glowIntensity: number;
+}
+
 const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }> = ({ onBoxClick, onGameOver }) => {
     const cylinderRef = useRef<THREE.Mesh | null>(null);
     const { camera } = useThree();
 
-    const [boxes, setBoxes] = useState<{ id: number, position: [number, number, number] }[]>([]);
+    const [boxes, setBoxes] = useState<BoxState[]>([]);
     const [bloodParticles, setBloodParticles] = useState<BloodParticle[]>([]);
     const [bullets, setBullets] = useState<Bullet[]>([]);
 
@@ -28,17 +39,86 @@ const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }>
 
     useMouseFollow(cylinderRef, camera);
 
+    // Animation loop for dying boxes
+    useEffect(() => {
+        let animationFrameId: number;
+
+        const updateDyingBoxes = () => {
+            setBoxes(prevBoxes => {
+                return prevBoxes.map(box => {
+                    if (!box.isDying) return box;
+
+                    const newDeathProgress = Math.min(box.deathProgress + 0.015, 1);
+
+                    // More dramatic rotation (multiple spins)
+                    const rotationX = Math.PI * 4 * newDeathProgress;
+                    const rotationY = Math.PI * 3 * newDeathProgress;
+                    const rotationZ = Math.PI * -2 * newDeathProgress;
+
+                    // More dramatic scale effect
+                    const scaleX = 1 + (0.2 * Math.sin(newDeathProgress * Math.PI * 4)) - (0.5 * newDeathProgress);
+                    const scaleY = 1 - (0.95 * newDeathProgress);
+                    const scaleZ = 1 + (0.2 * Math.cos(newDeathProgress * Math.PI * 4)) - (0.5 * newDeathProgress);
+
+                    // More intense shaking
+                    const shakeAmount = 0.2 * (1 - newDeathProgress);
+                    const position = [
+                        box.position[0] + (Math.random() - 0.5) * shakeAmount,
+                        box.position[1] + (Math.random() - 0.5) * shakeAmount,
+                        box.position[2] + (Math.random() - 0.5) * shakeAmount
+                    ] as [number, number, number];
+
+                    // Pulsing glow effect
+                    const glowIntensity = 0.5 + Math.sin(newDeathProgress * Math.PI * 8) * 0.5;
+
+                    // Color transition from normal to red to black
+                    let color = '#ffffff';
+                    if (newDeathProgress < 0.3) {
+                        color = '#ff0000';
+                    } else if (newDeathProgress < 0.6) {
+                        color = '#8B0000';
+                    } else {
+                        color = '#000000';
+                    }
+
+                    return {
+                        ...box,
+                        rotation: [rotationX, rotationY, rotationZ] as [number, number, number],
+                        scale: [scaleX, scaleY, scaleZ] as [number, number, number],
+                        position,
+                        deathProgress: newDeathProgress,
+                        color,
+                        glowIntensity
+                    };
+                }).filter(box => box.deathProgress < 1);
+            });
+
+            animationFrameId = requestAnimationFrame(updateDyingBoxes);
+        };
+
+        animationFrameId = requestAnimationFrame(updateDyingBoxes);
+        return () => cancelAnimationFrame(animationFrameId);
+    }, []);
+
     useEffect(() => {
         const interval = setInterval(() => {
             setBoxes(prevBoxes => {
-                // Check if adding a new box would exceed the limit
                 if (prevBoxes.length >= 10) {
                     onGameOver();
                     return prevBoxes;
                 }
                 return [
                     ...prevBoxes,
-                    { id: Date.now(), position: [Math.random() * 20 - 10, 0, Math.random() * -10] }
+                    {
+                        id: Date.now(),
+                        position: [Math.random() * 20 - 10, 0, Math.random() * -10],
+                        rotation: [0, 0, 0],
+                        scale: [1, 1, 1],
+                        isDying: false,
+                        deathProgress: 0,
+                        color: '#ffffff',
+                        glowIntensity: 0
+                    }
                 ];
             });
         }, 1000);
@@ -91,13 +171,13 @@ const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }>
     }, []);
 
     const createBloodEffect = (position: [number, number, number]) => {
-        const numParticles = 20;
+        const numParticles = 30; // Increased number of particles
         const newParticles: BloodParticle[] = [];
 
         for (let i = 0; i < numParticles; i++) {
             const angle = (Math.random() * Math.PI * 2);
-            const speed = Math.random() * 0.3 + 0.1;
-            const upwardSpeed = Math.random() * 0.2 + 0.1;
+            const speed = Math.random() * 0.5 + 0.2; // Increased speed
+            const upwardSpeed = Math.random() * 0.3 + 0.2;
 
             newParticles.push({
                 id: Date.now() + i,
@@ -115,7 +195,13 @@ const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }>
 
     const handleBoxClick = (id: number, position: [number, number, number]) => {
         createBloodEffect(position);
-        setBoxes(prevBoxes => prevBoxes.filter(box => box.id !== id));
+        setBoxes(prevBoxes =>
+            prevBoxes.map(box =>
+                box.id === id
+                    ? { ...box, isDying: true }
+                    : box
+            )
+        );
         onBoxClick();
     };
 
@@ -151,10 +237,17 @@ const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }>
                     key={box.id}
                     args={[1.5, 4, 0.5]}
                     position={box.position}
+                    rotation={box.rotation}
+                    scale={box.scale}
                     onClick={() => handleBoxClick(box.id, box.position)}
                 >
                     <meshStandardMaterial
                         map={manTexture}
+                        transparent={true}
+                        opacity={1 - box.deathProgress}
+                        color={box.color}
+                        emissive={box.isDying ? box.color : '#000000'}
+                        emissiveIntensity={box.glowIntensity}
                     />
                 </Box>
             ))}
