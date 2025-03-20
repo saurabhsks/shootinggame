@@ -107,11 +107,27 @@ const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }>
                     onGameOver();
                     return prevBoxes;
                 }
+                let position: [number, number, number];
+                 do {
+                     position = [
+                         Math.random() * 20 - 10,
+                         0,
+                         Math.random() * - 20
+                     ] as [number, number, number];
+                 } while (
+                     prevBoxes.some(
+                         box =>
+                             Math.abs(box.position[0] - position[0]) < 3 &&
+                             Math.abs(box.position[2] - position[2]) < 3
+                     )
+                 );
+
                 return [
                     ...prevBoxes,
                     {
                         id: Date.now(),
-                        position: [Math.random() * 20 - 10, 0, Math.random() * -10],
+                        // position: [Math.random() * 20 - 10, 0, Math.random() * -10],
+                        position,
                         rotation: [0, 0, 0],
                         scale: [1, 1, 1],
                         isDying: false,
@@ -128,6 +144,8 @@ const SceneObjects: React.FC<{ onBoxClick: () => void, onGameOver: () => void }>
 
 
 
+
+    
     // Update blood particles
     useEffect(() => {
         let animationFrameId: number;
